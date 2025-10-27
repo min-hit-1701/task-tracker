@@ -2,11 +2,19 @@ from flask import Flask, render_template, request, jsonify
 import json
 from datetime import datetime
 import os
+import socket
 
 app = Flask(__name__)
 
 # Đường dẫn file data mặc định
 DEFAULT_DATA_FILE = 'data/tasks.json'
+
+def get_system_info():
+    """Lấy thông tin hệ thống"""
+    return {
+        'hostname': socket.gethostname(),
+        'datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    }
 
 def get_data_file():
     """Lấy đường dẫn file data dựa trên environment"""
@@ -29,7 +37,9 @@ def save_tasks(tasks):
 
 @app.route('/')
 def home():
-    return render_template('index.html', tasks=load_tasks())
+    return render_template('index.html', 
+                         tasks=load_tasks(),
+                         system_info=get_system_info())
 
 @app.route('/about')
 def about():
@@ -44,7 +54,6 @@ def create_task():
     task = request.get_json()
     tasks = load_tasks()
     
-    # Tạo task mới
     new_task = {
         'id': datetime.now().strftime('%Y%m%d%H%M%S'),
         'title': task.get('title'),

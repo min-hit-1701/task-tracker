@@ -6,24 +6,18 @@ from app import app
 @pytest.fixture
 def client():
     """Setup test client"""
-    # Sử dụng file data riêng cho testing
     test_data_file = 'data/test_tasks.json'
-    
-    # Đảm bảo thư mục data tồn tại
     os.makedirs(os.path.dirname(test_data_file), exist_ok=True)
     
-    # Xóa file cũ nếu tồn tại
     if os.path.exists(test_data_file):
         os.remove(test_data_file)
     
-    # Setup test config
     app.config['TESTING'] = True
     app.config['DATA_FILE'] = test_data_file
     
     with app.test_client() as client:
         yield client
     
-    # Cleanup sau khi test xong
     if os.path.exists(test_data_file):
         os.remove(test_data_file)
 
@@ -32,6 +26,7 @@ def test_home_page(client):
     rv = client.get('/')
     assert rv.status_code == 200
     assert b"Project Task Tracker" in rv.data
+    # Không test system_info vì nó thay đổi theo môi trường
 
 def test_about_page(client):
     """Test trang about"""
@@ -61,7 +56,6 @@ def test_create_task(client):
 
 def test_get_tasks(client):
     """Test lấy danh sách tasks"""
-    # Tạo test task
     task_data = {
         'title': 'Test Task',
         'description': 'Test Description',
@@ -79,7 +73,6 @@ def test_get_tasks(client):
 
 def test_update_task_status(client):
     """Test cập nhật trạng thái task"""
-    # Tạo task
     task_data = {
         'title': 'Test Task',
         'description': 'Test Description',
@@ -124,11 +117,9 @@ def test_data_persistence(client):
                 data=json.dumps(task_data),
                 content_type='application/json')
     
-    # Verify file exists
     data_file = app.config['DATA_FILE']
     assert os.path.exists(data_file)
     
-    # Read and verify content
     with open(data_file, 'r') as f:
         tasks = json.load(f)
         assert len(tasks) == 1
