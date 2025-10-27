@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  AWS_REGION: ap-southeast-2
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -34,18 +37,35 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+    
     - name: Deploy to EC2
       uses: appleboy/ssh-action@master
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USERNAME }}
         key: ${{ secrets.EC2_SSH_KEY }}
+        script_stop: true
         script: |
-          # Update code
-          cd ~/task-tracker || git clone https://github.com/min-hit-1701/task-tracker.git ~/task-tracker
+          # Set timestamp for deployment
+          echo "Deploying at $(date -u '+%Y-%m-%d %H:%M:%S')"
+          
+          # Ensure task-tracker directory exists and is up to date
+          if [ ! -d "~/task-tracker" ]; then
+            git clone https://github.com/min-hit-1701/task-tracker.git ~/task-tracker
+          fi
           cd ~/task-tracker
           git fetch
           git reset --hard origin/main
+          
+          # Ensure Docker is running
+          sudo systemctl start docker
+          sudo systemctl enable docker
           
           # Stop and remove existing container
           docker stop task-tracker || true
@@ -54,9 +74,14 @@ jobs:
           # Build new image
           docker build -t task-tracker .
           
-          # Run new container
+          # Run new container with environment variables
           docker run -d \
             --name task-tracker \
             -p 8080:8080 \
+            -e AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
+            -e AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
+            -e AWS_DEFAULT_REGION=${{ env.AWS_REGION }} \
             --restart unless-stopped \
             task-tracker
+          
+          echo "Deployment completed at $(date -u '+%Y-%m-%d %H:%M:%S')"
