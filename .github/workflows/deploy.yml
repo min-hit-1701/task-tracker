@@ -7,7 +7,7 @@ on:
     branches: [ main ]
 
 env:
-  AWS_REGION: ap-southeast-2
+  AWS_REGION: ap-southeast-1
 
 jobs:
   test:
@@ -50,32 +50,29 @@ jobs:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USERNAME }}
         key: ${{ secrets.EC2_SSH_KEY }}
-        script_stop: true
         script: |
-          # Set timestamp for deployment
           echo "Deploying at $(date -u '+%Y-%m-%d %H:%M:%S')"
           
           # Ensure task-tracker directory exists and is up to date
-          if [ ! -d "~/task-tracker" ]; then
-            git clone https://github.com/min-hit-1701/task-tracker.git ~/task-tracker
-          fi
+          cd ~/task-tracker || git clone https://github.com/min-hit-1701/task-tracker.git ~/task-tracker
           cd ~/task-tracker
           git fetch
           git reset --hard origin/main
           
-          # Ensure Docker is running
+          # Ensure Docker is running with proper permissions
           sudo systemctl start docker
           sudo systemctl enable docker
+          sudo usermod -aG docker $USER
           
           # Stop and remove existing container
-          docker stop task-tracker || true
-          docker rm task-tracker || true
+          sudo docker stop task-tracker || true
+          sudo docker rm task-tracker || true
           
           # Build new image
-          docker build -t task-tracker .
+          sudo docker build -t task-tracker .
           
-          # Run new container with environment variables
-          docker run -d \
+          # Run new container
+          sudo docker run -d \
             --name task-tracker \
             -p 8080:8080 \
             -e AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
