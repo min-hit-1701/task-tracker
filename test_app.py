@@ -25,18 +25,38 @@ def client():
     """Fixture để tạo test client"""
     app.config['TESTING'] = True
     app.config['DATA_FILE'] = 'data/test_tasks.json'
+    """Setup test client"""
+    # Sử dụng file data riêng cho testing
+    test_data_file = 'data/test_tasks.json'
+    
+    # Đảm bảo thư mục data tồn tại
+    os.makedirs(os.path.dirname(test_data_file), exist_ok=True)
+    
+    # Xóa file cũ nếu tồn tại
+    if os.path.exists(test_data_file):
+        os.remove(test_data_file)
+    
+    # Setup test config
+    app.config['TESTING'] = True
+    app.config['DATA_FILE'] = test_data_file
     
     with app.test_client() as client:
         yield client
+    
+    # Cleanup sau khi test xong
+    if os.path.exists(test_data_file):
+        os.remove(test_data_file)
 
 def test_home_page(client):
     """Test trang chủ load thành công và hiển thị đúng tiêu đề"""
+    """Test trang chủ"""
     rv = client.get('/')
     assert rv.status_code == 200
     assert b"Project Task Tracker" in rv.data
 
 def test_about_page(client):
     """Test trang about load thành công"""
+    """Test trang about"""
     rv = client.get('/about')
     assert rv.status_code == 200
 
@@ -131,6 +151,19 @@ def test_data_persistence(client):
     
     # Read and verify content
     with open(app.config['DATA_FILE'], 'r') as f:
+        tasks = json.load(f)
+        assert len(tasks) == 1
+        assert tasks[0]['title'] == 'Persistence Test'
+    client.post('/api/tasks',
+                data=json.dumps(task_data),
+                content_type='application/json')
+    
+    # Verify file exists
+    data_file = app.config['DATA_FILE']
+    assert os.path.exists(data_file)
+    
+    # Read and verify content
+    with open(data_file, 'r') as f:
         tasks = json.load(f)
         assert len(tasks) == 1
         assert tasks[0]['title'] == 'Persistence Test'
