@@ -6,11 +6,6 @@ on:
   pull_request:
     branches: [ main ]
 
-env:
-  EC2_HOST: ${{ secrets.EC2_HOST }}
-  EC2_USERNAME: ubuntu
-  GITHUB_USERNAME: min-hit-1701
-
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -34,6 +29,8 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
     steps:
     - uses: actions/checkout@v2
     
@@ -41,12 +38,25 @@ jobs:
       uses: appleboy/ssh-action@master
       with:
         host: ${{ secrets.EC2_HOST }}
-        username: ${{ env.EC2_USERNAME }}
+        username: ${{ secrets.EC2_USERNAME }}
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-          cd ~/task-tracker || mkdir -p ~/task-tracker
-          git pull || git clone https://github.com/min-hit-1701/task-tracker.git .
+          # Update code
+          cd ~/task-tracker || git clone https://github.com/min-hit-1701/task-tracker.git ~/task-tracker
+          cd ~/task-tracker
+          git fetch
+          git reset --hard origin/main
+          
+          # Stop and remove existing container
           docker stop task-tracker || true
           docker rm task-tracker || true
+          
+          # Build new image
           docker build -t task-tracker .
-          docker run -d --name task-tracker -p 8080:8080 task-tracker
+          
+          # Run new container
+          docker run -d \
+            --name task-tracker \
+            -p 8080:8080 \
+            --restart unless-stopped \
+            task-tracker
