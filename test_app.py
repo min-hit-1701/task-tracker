@@ -3,24 +3,31 @@ import json
 import os
 from app import app
 
+@pytest.fixture(autouse=True)
+def setup_and_teardown():
+    """Fixture để setup và cleanup trước/sau mỗi test"""
+    # Setup: Tạo thư mục data và file test
+    os.makedirs('data', exist_ok=True)
+    test_file = 'data/test_tasks.json'
+    
+    # Đảm bảo file trống trước mỗi test
+    with open(test_file, 'w') as f:
+        json.dump([], f)
+    
+    yield
+    
+    # Cleanup: Xóa file test sau mỗi test
+    if os.path.exists(test_file):
+        os.remove(test_file)
+
 @pytest.fixture
 def client():
+    """Fixture để tạo test client"""
     app.config['TESTING'] = True
     app.config['DATA_FILE'] = 'data/test_tasks.json'
     
-    # Đảm bảo thư mục data tồn tại
-    os.makedirs('data', exist_ok=True)
-    
-    # Clear test data trước mỗi test
-    with open(app.config['DATA_FILE'], 'w') as f:
-        json.dump([], f)
-        
     with app.test_client() as client:
         yield client
-        
-    # Cleanup sau mỗi test
-    if os.path.exists(app.config['DATA_FILE']):
-        os.remove(app.config['DATA_FILE'])
 
 def test_home_page(client):
     """Test trang chủ load thành công và hiển thị đúng tiêu đề"""
@@ -56,10 +63,6 @@ def test_create_task(client):
 
 def test_get_tasks(client):
     """Test lấy danh sách tasks"""
-    # Clear data trước
-    with open(app.config['DATA_FILE'], 'w') as f:
-        json.dump([], f)
-        
     # Tạo test task
     task_data = {
         'title': 'Test Task',
@@ -98,12 +101,11 @@ def test_update_task_status(client):
 
 def test_task_validation(client):
     """Test validation khi tạo task"""
-    # Test thiếu description
     task_data = {'title': 'Test Task'}
     rv = client.post('/api/tasks',
                     data=json.dumps(task_data),
                     content_type='application/json')
-    assert rv.status_code == 201  # Thay đổi expect thành 201 vì API chấp nhận task không có description
+    assert rv.status_code == 201
 
 def test_invalid_task_id(client):
     """Test xử lý task ID không tồn tại"""
@@ -115,19 +117,14 @@ def test_invalid_task_id(client):
 
 def test_data_persistence(client):
     """Test dữ liệu được lưu trữ đúng"""
-    # Clear data trước
-    with open(app.config['DATA_FILE'], 'w') as f:
-        json.dump([], f)
-        
-    # Tạo task
     task_data = {
         'title': 'Persistence Test',
         'description': 'Test Description',
         'priority': 'high'
     }
-    client.post('/api/tasks',
-                data=json.dumps(task_data),
-                content_type='application/json')
+    rv = client.post('/api/tasks',
+                    data=json.dumps(task_data),
+                    content_type='application/json')
     
     # Verify file exists
     assert os.path.exists(app.config['DATA_FILE'])
@@ -135,5 +132,5 @@ def test_data_persistence(client):
     # Read and verify content
     with open(app.config['DATA_FILE'], 'r') as f:
         tasks = json.load(f)
-        assert len(tasks) >= 1
-        assert any(task['title'] == 'Persistence Test' for task in tasks)
+        assert len(tasks) == 1
+        assert tasks[0]['title'] == 'Persistence Test'
