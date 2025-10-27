@@ -3,28 +3,8 @@ import json
 import os
 from app import app
 
-@pytest.fixture(autouse=True)
-def setup_and_teardown():
-    """Fixture để setup và cleanup trước/sau mỗi test"""
-    # Setup: Tạo thư mục data và file test
-    os.makedirs('data', exist_ok=True)
-    test_file = 'data/test_tasks.json'
-    
-    # Đảm bảo file trống trước mỗi test
-    with open(test_file, 'w') as f:
-        json.dump([], f)
-    
-    yield
-    
-    # Cleanup: Xóa file test sau mỗi test
-    if os.path.exists(test_file):
-        os.remove(test_file)
-
 @pytest.fixture
 def client():
-    """Fixture để tạo test client"""
-    app.config['TESTING'] = True
-    app.config['DATA_FILE'] = 'data/test_tasks.json'
     """Setup test client"""
     # Sử dụng file data riêng cho testing
     test_data_file = 'data/test_tasks.json'
@@ -48,14 +28,12 @@ def client():
         os.remove(test_data_file)
 
 def test_home_page(client):
-    """Test trang chủ load thành công và hiển thị đúng tiêu đề"""
     """Test trang chủ"""
     rv = client.get('/')
     assert rv.status_code == 200
     assert b"Project Task Tracker" in rv.data
 
 def test_about_page(client):
-    """Test trang about load thành công"""
     """Test trang about"""
     rv = client.get('/about')
     assert rv.status_code == 200
@@ -142,18 +120,6 @@ def test_data_persistence(client):
         'description': 'Test Description',
         'priority': 'high'
     }
-    rv = client.post('/api/tasks',
-                    data=json.dumps(task_data),
-                    content_type='application/json')
-    
-    # Verify file exists
-    assert os.path.exists(app.config['DATA_FILE'])
-    
-    # Read and verify content
-    with open(app.config['DATA_FILE'], 'r') as f:
-        tasks = json.load(f)
-        assert len(tasks) == 1
-        assert tasks[0]['title'] == 'Persistence Test'
     client.post('/api/tasks',
                 data=json.dumps(task_data),
                 content_type='application/json')
