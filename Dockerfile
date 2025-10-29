@@ -13,7 +13,6 @@ RUN mkdir -p data instance && \
     chmod 777 instance
 
 ENV FLASK_APP=app.py
-ENV SECRET_KEY=${FLASK_SECRET_KEY}
 
 EXPOSE 8080
 
