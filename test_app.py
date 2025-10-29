@@ -9,13 +9,16 @@ from werkzeug.security import generate_password_hash
 def client():
     """Setup test client"""
     app.config['TESTING'] = True
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    # Sử dụng SQLite in-memory database cho testing
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'  # SQLite in-memory
     app.config['DATA_FILE'] = 'data/test_tasks.json'
     app.config['WTF_CSRF_ENABLED'] = False
     
     with app.test_client() as client:
         with app.app_context():
+            # Create all tables in the in-memory database
             db.create_all()
+            
             # Create test user
             user = User(
                 username='testuser',
@@ -24,12 +27,19 @@ def client():
             )
             db.session.add(user)
             db.session.commit()
+            
+            # Create test data directory
+            os.makedirs('data', exist_ok=True)
+            
         yield client
+        
         # Cleanup
+        with app.app_context():
+            db.session.remove()
+            db.drop_all()
+        
         if os.path.exists(app.config['DATA_FILE']):
             os.remove(app.config['DATA_FILE'])
-        with app.app_context():
-            db.drop_all()
 
 @pytest.fixture
 def auth_client(client):
