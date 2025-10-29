@@ -8,15 +8,19 @@ from werkzeug.security import generate_password_hash
 @pytest.fixture
 def client():
     """Setup test client"""
+    # Create test data directory
+    test_data_dir = os.path.join(os.path.dirname(__file__), 'test_data')
+    os.makedirs(test_data_dir, exist_ok=True)
+    test_data_file = os.path.join(test_data_dir, 'test_tasks.json')
+
+    # Configure app for testing
     app.config.update(
         TESTING=True,
         SQLALCHEMY_DATABASE_URI='sqlite:///:memory:',
         WTF_CSRF_ENABLED=False,
-        SECRET_KEY='test-secret-key'
+        SECRET_KEY='test-secret-key',
+        DATA_FILE=test_data_file
     )
-
-    # Create test data directory
-    os.makedirs('data', exist_ok=True)
     
     # Create tables and test client
     with app.test_client() as client:
@@ -33,16 +37,19 @@ def client():
             db.session.add(user)
             db.session.commit()
             
+            # Clear test tasks file if it exists
+            if os.path.exists(test_data_file):
+                os.remove(test_data_file)
+            
             yield client
             
             # Cleanup
             db.session.remove()
             db.drop_all()
 
-    # Remove test data file if exists
-    test_data_file = os.path.join('data', 'test_tasks.json')
-    if os.path.exists(test_data_file):
-        os.remove(test_data_file)
+            # Remove test file
+            if os.path.exists(test_data_file):
+                os.remove(test_data_file)
 
 @pytest.fixture
 def auth_client(client):
@@ -102,6 +109,11 @@ def test_create_task(auth_client):
 
 def test_get_tasks(auth_client):
     """Test lấy danh sách tasks"""
+    # Make sure we start with an empty task list
+    test_data_file = app.config['DATA_FILE']
+    if os.path.exists(test_data_file):
+        os.remove(test_data_file)
+
     task_data = {
         'title': 'Test Task',
         'description': 'Test Description',

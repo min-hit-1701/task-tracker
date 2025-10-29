@@ -8,9 +8,6 @@ import os
 import socket
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instance/tasktracker.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Set base directory for the app
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -19,7 +16,8 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 app.config.update(
     SECRET_KEY=os.environ.get('SECRET_KEY', 'your-secret-key'),
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
-    TESTING=False
+    TESTING=False,
+    DATA_FILE=os.path.join(basedir, 'data', 'tasks.json')
 )
 
 # Set the database URI based on testing mode
@@ -27,8 +25,6 @@ if app.config['TESTING']:
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
 else:
     app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(basedir, "app.db")}'
-
-
 
 # Initialize extensions
 db.init_app(app)
@@ -45,20 +41,8 @@ if not app.config['TESTING']:
     with app.app_context():
         db.create_all()
 
-# Function to initialize database
-def init_db():
-    # Ensure instance directory exists
-    os.makedirs('instance', exist_ok=True)
-    
-    # Create database tables within app context if not testing
-    if not app.config.get('TESTING', False):
-        with app.app_context():
-            db.create_all()
-
-DEFAULT_DATA_FILE = 'data/tasks.json'
-
 def get_data_file():
-    return app.config.get('DATA_FILE', DEFAULT_DATA_FILE)
+    return app.config['DATA_FILE']
 
 def load_tasks():
     data_file = get_data_file()
@@ -88,12 +72,10 @@ def register():
             password = request.form.get('password')
             email = request.form.get('email')
 
-            # Validate input
             if not username or not password or not email:
                 flash('All fields are required')
                 return redirect(url_for('register'))
 
-            # Check if user exists
             if User.query.filter_by(username=username).first():
                 flash('Username already exists')
                 return redirect(url_for('register'))
@@ -102,21 +84,19 @@ def register():
                 flash('Email already registered')
                 return redirect(url_for('register'))
 
-            # Create new user
             user = User(
                 username=username,
                 password=generate_password_hash(password),
                 email=email
             )
             
-            # Save to database
             db.session.add(user)
             db.session.commit()
 
             flash('Registration successful!')
             return redirect(url_for('login'))
         except Exception as e:
-            print(f"Registration error: {str(e)}")  # Log error
+            print(f"Registration error: {str(e)}")
             db.session.rollback()
             flash('An error occurred during registration')
             return redirect(url_for('register'))
@@ -199,7 +179,5 @@ def health_check():
         'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     })
 
-# Initialize database when running directly
 if __name__ == '__main__':
-    init_db()
     app.run(host='0.0.0.0', port=8080)
