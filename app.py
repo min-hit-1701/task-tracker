@@ -1,27 +1,33 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
+from flask_login import LoginManager, login_user, login_required, logout_user, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+from models import db, User
 import json
 from datetime import datetime
 import os
 import socket
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key')
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///tasktracker.db'
 
-# Đường dẫn file data mặc định
+# Initialize extensions
+db.init_app(app)
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# Giữ nguyên các functions hiện tại cho tasks
 DEFAULT_DATA_FILE = 'data/tasks.json'
 
-def get_system_info():
-    """Lấy thông tin hệ thống"""
-    return {
-        'hostname': socket.gethostname(),
-        'datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    }
-
 def get_data_file():
-    """Lấy đường dẫn file data dựa trên environment"""
     return app.config.get('DATA_FILE', DEFAULT_DATA_FILE)
 
 def load_tasks():
-    """Load tasks từ file"""
     data_file = get_data_file()
     if os.path.exists(data_file):
         with open(data_file, 'r') as f:
@@ -29,27 +35,75 @@ def load_tasks():
     return []
 
 def save_tasks(tasks):
-    """Lưu tasks vào file"""
     data_file = get_data_file()
     os.makedirs(os.path.dirname(data_file), exist_ok=True)
     with open(data_file, 'w') as f:
         json.dump(tasks, f)
 
-@app.route('/')
-def home():
-    return render_template('index.html', 
-                         tasks=load_tasks(),
-                         system_info=get_system_info())
+# Thêm routes mới cho authentication
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        email = request.form.get('email')
 
+        if User.query.filter_by(username=username).first():
+            flash('Username already exists')
+            return redirect(url_for('register'))
+
+        user = User(
+            username=username,
+            password=generate_password_hash(password),
+            email=email
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        flash('Registration successful!')
+        return redirect(url_for('login'))
+
+    return render_template('register.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        user = User.query.filter_by(username=username).first()
+
+        if user and check_password_hash(user.password, password):
+            login_user(user)
+            return redirect(url_for('home'))
+
+        flash('Invalid username or password')
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+# Modify existing routes to require login
+@app.route('/')
+@login_required
+def home():
+    tasks = load_tasks()
+    return render_template('index.html', tasks=tasks)
+
+# Keep other existing routes
 @app.route('/about')
 def about():
     return render_template('about.html')
 
 @app.route('/api/tasks', methods=['GET'])
+@login_required
 def get_tasks():
     return jsonify(load_tasks())
 
 @app.route('/api/tasks', methods=['POST'])
+@login_required
 def create_task():
     task = request.get_json()
     tasks = load_tasks()
@@ -68,6 +122,7 @@ def create_task():
     return jsonify(new_task), 201
 
 @app.route('/api/tasks/<task_id>', methods=['PUT'])
+@login_required
 def update_task(task_id):
     tasks = load_tasks()
     task_update = request.get_json()
@@ -84,8 +139,11 @@ def update_task(task_id):
 def health_check():
     return jsonify({
         'status': 'healthy',
-        'version': '1.0.0'
+        'version': '1.0.0',
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     })
 
 if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
     app.run(host='0.0.0.0', port=8080)
