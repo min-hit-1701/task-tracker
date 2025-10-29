@@ -53,28 +53,33 @@ jobs:
         script: |
           echo "Deploying at $(date -u '+%Y-%m-%d %H:%M:%S')"
           
-          # Ensure task-tracker directory exists and is up to date
+          # Go to project directory
           cd ~/task-tracker || git clone https://github.com/min-hit-1701/task-tracker.git ~/task-tracker
           cd ~/task-tracker
           git fetch
           git reset --hard origin/main
           
-          # Ensure Docker is running with proper permissions
+          # Ensure Docker is running
           sudo systemctl start docker
           sudo systemctl enable docker
           sudo usermod -aG docker $USER
           
+          # Create volume for persistent data
+          docker volume create task-tracker-data
+          
           # Stop and remove existing container
-          sudo docker stop task-tracker || true
-          sudo docker rm task-tracker || true
+          docker stop task-tracker || true
+          docker rm task-tracker || true
           
           # Build new image
-          sudo docker build -t task-tracker .
+          docker build -t task-tracker .
           
-          # Run new container
-          sudo docker run -d \
+          # Run new container with volume and environment variables
+          docker run -d \
             --name task-tracker \
             -p 8080:8080 \
+            -v task-tracker-data:/app/instance \
+            -e SECRET_KEY=${{ secrets.FLASK_SECRET_KEY }} \
             -e AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
             -e AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
             -e AWS_DEFAULT_REGION=${{ env.AWS_REGION }} \
