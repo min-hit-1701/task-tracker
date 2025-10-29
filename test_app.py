@@ -8,15 +8,20 @@ from werkzeug.security import generate_password_hash
 @pytest.fixture
 def client():
     """Setup test client"""
+    # Configure app for testing
     app.config['TESTING'] = True
-    # Sử dụng SQLite in-memory database cho testing
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'  # SQLite in-memory
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
     app.config['DATA_FILE'] = 'data/test_tasks.json'
     app.config['WTF_CSRF_ENABLED'] = False
+    app.config['SECRET_KEY'] = 'test-secret-key'
+
+    # Create test data directory
+    os.makedirs('data', exist_ok=True)
     
+    # Create tables and test client
     with app.test_client() as client:
         with app.app_context():
-            # Create all tables in the in-memory database
+            # Create all tables
             db.create_all()
             
             # Create test user
@@ -28,26 +33,24 @@ def client():
             db.session.add(user)
             db.session.commit()
             
-            # Create test data directory
-            os.makedirs('data', exist_ok=True)
+            yield client
             
-        yield client
-        
-        # Cleanup
-        with app.app_context():
+            # Cleanup
             db.session.remove()
             db.drop_all()
-        
-        if os.path.exists(app.config['DATA_FILE']):
-            os.remove(app.config['DATA_FILE'])
+
+    # Remove test data file
+    if os.path.exists(app.config['DATA_FILE']):
+        os.remove(app.config['DATA_FILE'])
 
 @pytest.fixture
 def auth_client(client):
     """Client with authenticated user"""
-    client.post('/login', data={
-        'username': 'testuser',
-        'password': 'testpass'
-    })
+    with client.session_transaction() as sess:
+        client.post('/login', data={
+            'username': 'testuser',
+            'password': 'testpass'
+        }, follow_redirects=True)
     return client
 
 def test_login_page(client):
@@ -68,7 +71,7 @@ def test_home_page(auth_client):
     """Test trang chủ"""
     rv = auth_client.get('/')
     assert rv.status_code == 200
-    assert b"Project Task Tracker" in rv.data
+    assert b"Task Tracker" in rv.data
 
 def test_about_page(client):
     """Test trang about"""

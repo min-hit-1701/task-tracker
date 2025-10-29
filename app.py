@@ -18,20 +18,17 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-# Ensure instance directory exists
-os.makedirs('instance', exist_ok=True)
-
-# Create tables within app context
-with app.app_context():
-    try:
-        db.create_all()
-        print("Database tables created successfully!")
-    except Exception as e:
-        print(f"Error creating database tables: {str(e)}")
-
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+# Ensure instance directory exists
+os.makedirs('instance', exist_ok=True)
+
+# Create database tables within app context if not testing
+if not app.config.get('TESTING', False):
+    with app.app_context():
+        db.create_all()
 
 DEFAULT_DATA_FILE = 'data/tasks.json'
 
