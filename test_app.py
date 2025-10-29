@@ -1,19 +1,19 @@
 import pytest
 import json
 import os
-from app import app, db, init_db
+from app import app, db
 from models import User
 from werkzeug.security import generate_password_hash
 
 @pytest.fixture
 def client():
     """Setup test client"""
-    # Configure app for testing
-    app.config['TESTING'] = True
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
-    app.config['DATA_FILE'] = 'data/test_tasks.json'
-    app.config['WTF_CSRF_ENABLED'] = False
-    app.config['SECRET_KEY'] = 'test-secret-key'
+    app.config.update(
+        TESTING=True,
+        SQLALCHEMY_DATABASE_URI='sqlite:///:memory:',
+        WTF_CSRF_ENABLED=False,
+        SECRET_KEY='test-secret-key'
+    )
 
     # Create test data directory
     os.makedirs('data', exist_ok=True)
@@ -39,9 +39,10 @@ def client():
             db.session.remove()
             db.drop_all()
 
-    # Remove test data file
-    if os.path.exists(app.config['DATA_FILE']):
-        os.remove(app.config['DATA_FILE'])
+    # Remove test data file if exists
+    test_data_file = os.path.join('data', 'test_tasks.json')
+    if os.path.exists(test_data_file):
+        os.remove(test_data_file)
 
 @pytest.fixture
 def auth_client(client):

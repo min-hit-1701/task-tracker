@@ -12,6 +12,24 @@ app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///instance/tasktracker.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# Set base directory for the app
+basedir = os.path.abspath(os.path.dirname(__file__))
+
+# Basic configurations
+app.config.update(
+    SECRET_KEY=os.environ.get('SECRET_KEY', 'your-secret-key'),
+    SQLALCHEMY_TRACK_MODIFICATIONS=False,
+    TESTING=False
+)
+
+# Set the database URI based on testing mode
+if app.config['TESTING']:
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(basedir, "app.db")}'
+
+
+
 # Initialize extensions
 db.init_app(app)
 login_manager = LoginManager()
@@ -21,6 +39,11 @@ login_manager.login_view = 'login'
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+# Create database tables if not testing
+if not app.config['TESTING']:
+    with app.app_context():
+        db.create_all()
 
 # Function to initialize database
 def init_db():
