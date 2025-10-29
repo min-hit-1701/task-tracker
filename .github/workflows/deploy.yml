@@ -65,19 +65,29 @@ jobs:
           sudo systemctl enable docker
           sudo usermod -aG docker $USER
           
+          # Ensure data persistence
           docker volume create task-tracker-data
           
+          # Stop and remove existing container
           docker stop task-tracker || true
           docker rm task-tracker || true
           
+          # Build new image
           docker build -t task-tracker .
           
+          # Run with proper permissions and environment
           docker run -d \
             --name task-tracker \
             -p 8080:8080 \
             -v task-tracker-data:/app/instance \
             -e SECRET_KEY="${FLASK_SECRET_KEY}" \
+            -e FLASK_ENV=production \
+            -e PYTHONUNBUFFERED=1 \
             --restart unless-stopped \
             task-tracker
+          
+          # Wait for container to start and check logs
+          sleep 5
+          docker logs task-tracker
           
           echo "Deployment completed at $(date -u '+%Y-%m-%d %H:%M:%S')"
