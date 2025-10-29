@@ -1,7 +1,7 @@
 import pytest
 import json
 import os
-from app import app, db
+from app import app, db, init_db
 from models import User
 from werkzeug.security import generate_password_hash
 

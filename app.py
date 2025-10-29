@@ -22,13 +22,15 @@ login_manager.login_view = 'login'
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# Ensure instance directory exists
-os.makedirs('instance', exist_ok=True)
-
-# Create database tables within app context if not testing
-if not app.config.get('TESTING', False):
-    with app.app_context():
-        db.create_all()
+# Function to initialize database
+def init_db():
+    # Ensure instance directory exists
+    os.makedirs('instance', exist_ok=True)
+    
+    # Create database tables within app context if not testing
+    if not app.config.get('TESTING', False):
+        with app.app_context():
+            db.create_all()
 
 DEFAULT_DATA_FILE = 'data/tasks.json'
 
@@ -174,5 +176,7 @@ def health_check():
         'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     })
 
+# Initialize database when running directly
 if __name__ == '__main__':
+    init_db()
     app.run(host='0.0.0.0', port=8080)
