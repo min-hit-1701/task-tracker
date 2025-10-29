@@ -90,7 +90,9 @@ def logout():
 @login_required
 def home():
     tasks = load_tasks()
-    return render_template('index.html', tasks=tasks)
+    return render_template('index.html', 
+                         tasks=tasks,
+                         system_info=get_system_info())
 
 # Keep other existing routes
 @app.route('/about')
@@ -142,6 +144,14 @@ def health_check():
         'version': '1.0.0',
         'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     })
+
+def get_system_info():
+    """Lấy thông tin hệ thống"""
+    return {
+        'hostname': socket.gethostname(),
+        'datetime': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'current_user': os.getenv('USER', 'unknown')
+    }
 
 if __name__ == '__main__':
     with app.app_context():

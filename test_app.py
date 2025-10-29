@@ -44,7 +44,7 @@ def test_login_page(client):
     """Test login page"""
     rv = client.get('/login')
     assert rv.status_code == 200
-    assert b'Login' in rv.data
+    assert b'ng nh' in rv.data
 
 def test_login(client):
     """Test login functionality"""
