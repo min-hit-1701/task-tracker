@@ -1,32 +1,64 @@
 import pytest
 import json
 import os
-from app import app
+from app import app, db
+from models import User
+from werkzeug.security import generate_password_hash
 
 @pytest.fixture
 def client():
     """Setup test client"""
-    test_data_file = 'data/test_tasks.json'
-    os.makedirs(os.path.dirname(test_data_file), exist_ok=True)
-    
-    if os.path.exists(test_data_file):
-        os.remove(test_data_file)
-    
     app.config['TESTING'] = True
-    app.config['DATA_FILE'] = test_data_file
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    app.config['DATA_FILE'] = 'data/test_tasks.json'
+    app.config['WTF_CSRF_ENABLED'] = False
     
     with app.test_client() as client:
+        with app.app_context():
+            db.create_all()
+            # Create test user
+            user = User(
+                username='testuser',
+                password=generate_password_hash('testpass'),
+                email='test@example.com'
+            )
+            db.session.add(user)
+            db.session.commit()
         yield client
-    
-    if os.path.exists(test_data_file):
-        os.remove(test_data_file)
+        # Cleanup
+        if os.path.exists(app.config['DATA_FILE']):
+            os.remove(app.config['DATA_FILE'])
+        with app.app_context():
+            db.drop_all()
 
-def test_home_page(client):
+@pytest.fixture
+def auth_client(client):
+    """Client with authenticated user"""
+    client.post('/login', data={
+        'username': 'testuser',
+        'password': 'testpass'
+    })
+    return client
+
+def test_login_page(client):
+    """Test login page"""
+    rv = client.get('/login')
+    assert rv.status_code == 200
+    assert b'Login' in rv.data
+
+def test_login(client):
+    """Test login functionality"""
+    rv = client.post('/login', data={
+        'username': 'testuser',
+        'password': 'testpass'
+    })
+    assert rv.status_code == 302  # Redirect after login
+
+def test_home_page(auth_client):
     """Test trang chủ"""
-    rv = client.get('/')
+    rv = auth_client.get('/')
     assert rv.status_code == 200
     assert b"Project Task Tracker" in rv.data
-    # Không test system_info vì nó thay đổi theo môi trường
 
 def test_about_page(client):
     """Test trang about"""
@@ -40,80 +72,80 @@ def test_health_check(client):
     assert rv.status_code == 200
     assert json_data['status'] == 'healthy'
 
-def test_create_task(client):
+def test_create_task(auth_client):
     """Test tạo task mới"""
     task_data = {
         'title': 'Test Task',
         'description': 'Test Description',
         'priority': 'high'
     }
-    rv = client.post('/api/tasks',
+    rv = auth_client.post('/api/tasks',
                     data=json.dumps(task_data),
                     content_type='application/json')
     assert rv.status_code == 201
     json_data = rv.get_json()
     assert json_data['title'] == 'Test Task'
 
-def test_get_tasks(client):
+def test_get_tasks(auth_client):
     """Test lấy danh sách tasks"""
     task_data = {
         'title': 'Test Task',
         'description': 'Test Description',
         'priority': 'high'
     }
-    client.post('/api/tasks',
+    auth_client.post('/api/tasks',
                 data=json.dumps(task_data),
                 content_type='application/json')
     
-    rv = client.get('/api/tasks')
+    rv = auth_client.get('/api/tasks')
     assert rv.status_code == 200
     tasks = rv.get_json()
     assert len(tasks) == 1
     assert tasks[0]['title'] == 'Test Task'
 
-def test_update_task_status(client):
+def test_update_task_status(auth_client):
     """Test cập nhật trạng thái task"""
     task_data = {
         'title': 'Test Task',
         'description': 'Test Description',
         'priority': 'high'
     }
-    rv = client.post('/api/tasks',
+    rv = auth_client.post('/api/tasks',
                     data=json.dumps(task_data),
                     content_type='application/json')
     task_id = rv.get_json()['id']
     
     update_data = {'status': 'completed'}
-    rv = client.put(f'/api/tasks/{task_id}',
+    rv = auth_client.put(f'/api/tasks/{task_id}',
                    data=json.dumps(update_data),
                    content_type='application/json')
     assert rv.status_code == 200
     assert rv.get_json()['status'] == 'completed'
 
-def test_task_validation(client):
+def test_task_validation(auth_client):
     """Test validation khi tạo task"""
     task_data = {'title': 'Test Task'}
-    rv = client.post('/api/tasks',
+    rv = auth_client.post('/api/tasks',
                     data=json.dumps(task_data),
                     content_type='application/json')
     assert rv.status_code == 201
 
-def test_invalid_task_id(client):
+def test_invalid_task_id(auth_client):
     """Test xử lý task ID không tồn tại"""
     update_data = {'status': 'completed'}
-    rv = client.put('/api/tasks/invalid_id',
+    rv = auth_client.put('/api/tasks/invalid_id',
                    data=json.dumps(update_data),
                    content_type='application/json')
     assert rv.status_code == 404
 
-def test_data_persistence(client):
+def test_data_persistence(auth_client):
     """Test dữ liệu được lưu trữ đúng"""
     task_data = {
         'title': 'Persistence Test',
         'description': 'Test Description',
         'priority': 'high'
     }
-    client.post('/api/tasks',
+    auth_client.post('/api/tasks',
                 data=json.dumps(task_data),
                 content_type='application/json')
     
